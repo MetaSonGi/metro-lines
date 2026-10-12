@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>노선 잇기 퍼즐 - Metro Lines</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { height:100%; overflow:hidden;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;
+    background:#f4f6fa; color:#222; user-select:none; -webkit-user-select:none; }
+  #app { display:flex; flex-direction:column; height:100%; }
+  header { display:flex; align-items:center; justify-content:space-between; padding:8px 16px; background:#fff; border-bottom:1px solid #e3e8ef; }
+  .stat { text-align:center; min-width:80px; }
+  .stat .label { font-size:11px; color:#888; }
+  .stat .value { font-size:20px; font-weight:800; }
+  #toolbar { display:flex; align-items:center; gap:8px; padding:8px 12px; background:#fff; border-bottom:1px solid #e3e8ef; flex-wrap:wrap; }
+  #chips { display:flex; gap:8px; }
+  .chip { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:20px; border:2px solid #ddd; background:#fff; font-size:13px; font-weight:700; cursor:pointer; }
+  .chip .dot { width:12px; height:12px; border-radius:50%; }
+  .chip.active { border-color:#2b3340; background:#eef3ff; }
+  .chip.empty { opacity:.45; border-style:dashed; cursor:default; }
+  button { font-family:inherit; }
+  .btn { padding:7px 12px; border-radius:10px; border:1px solid #d5dbe5; background:#fff; font-size:13px; font-weight:700; cursor:pointer; }
+  .btn:active { transform:scale(.95); }
+  .btn.danger { color:#d33; border-color:#f0b9b9; }
+  #wrap { position:relative; flex:1; min-height:0; }
+  canvas { display:block; width:100%; height:100%; touch-action:none; }
+  #toast { position:absolute; left:50%; bottom:18px; transform:translateX(-50%); background:rgba(20,24,32,.88); color:#fff;
+    padding:8px 16px; border-radius:20px; font-size:13px; opacity:0; transition:opacity .25s; pointer-events:none; white-space:nowrap; z-index:5; }
+  .overlay { position:absolute; inset:0; background:rgba(15,20,30,.6); display:flex; align-items:center; justify-content:center; z-index:10; padding:16px; }
+  .card { background:#fff; border-radius:18px; padding:24px 26px; max-width:360px; width:100%; text-align:center; box-shadow:0 12px 40px rgba(0,0,0,.28); }
+  .card h1 { font-size:22px; margin-bottom:10px; }
+  .card p { font-size:14px; color:#555; line-height:1.7; margin-bottom:6px; text-align:left; }
+  .card .big { font-size:44px; font-weight:800; margin:8px 0 4px; }
+  .card .sub { font-size:14px; color:#777; margin-bottom:6px; }
+  .card .row { display:flex; gap:8px; justify-content:center; margin-top:16px; }
+  .btn.primary { background:#2f6df6; border-color:#2f6df6; color:#fff; padding:11px 26px; font-size:16px; border-radius:12px; }
+  .hidden { display:none !important; }
+  .legend { display:flex; justify-content:center; gap:16px; margin:12px 0 4px; font-size:26px; color:#2b3340; }
+  .kbd { background:#eef1f6; border-radius:6px; padding:1px 7px; font-size:12px; font-weight:700; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="stat"><div class="label">점수</div><div class="value" id="score">0</div></div>
+    <div class="stat"><div class="label">시간</div><div class="value" id="time">0:00</div></div>
+    <div class="stat"><div class="label">최고기록</div><div class="value" id="best">0</div></div>
+  </header>
+  <div id="toolbar">
+    <div id="chips"></div>
+    <button class="btn danger" id="delLine">🗑 노선 삭제</button>
+    <button class="btn" id="pauseBtn">⏸ 일시정지</button>
+    <button class="btn" id="restartBtn">↻ 재시작</button>
+  </div>
+  <div id="wrap">
+    <canvas id="cv"></canvas>
+    <div id="toast"></div>
+
+    <div class="overlay" id="menuOv">
+      <div class="card">
+        <h1>🚇 노선 잇기 퍼즐</h1>
+        <div class="legend"><span>●</span><span>▲</span><span>■</span></div>
+        <p>① 역에서 <b>드래그</b>해 다른 역에 연결하면 노선이 생겨요 (최대 3개)</p>
+        <p>② 열차가 자동 왕복 운행하며 <b>같은 모양 승객</b>을 목적지 역까지 배달해요</p>
+        <p>③ 역에 승객이 <b>6명</b> 쌓이면 게임 오버! 시간이 지날수록 손님이 몰려와요</p>
+        <p>④ 역을 <b>길게 누르면</b> 노선에서 해제, 상단 칩으로 노선 선택·삭제</p>
+        <p style="text-align:center;color:#888"><span class="kbd">Space</span> 일시정지 · <span class="kbd">R</span> 재시작</p>
+        <div class="row"><button class="btn primary" id="startBtn">▶ 게임 시작</button></div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="pauseOv">
+      <div class="card">
+        <h1>⏸ 일시정지</h1>
+        <p style="text-align:center">잠시 쉬는 중이에요</p>
+        <div class="row">
+          <button class="btn primary" id="resumeBtn">▶ 계속하기</button>
+          <button class="btn" id="pauseRestartBtn">↻ 재시작</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="overlay hidden" id="overOv">
+      <div class="card">
+        <h1>💥 게임 오버</h1>
+        <p style="text-align:center">역에 승객이 가득 찼어요!</p>
+        <div class="big" id="finalScore">0</div>
+        <div class="sub">최고기록 <b id="finalBest">0</b> · 플레이 시간 <b id="finalTime">0:00</b></div>
+        <div class="row"><button class="btn primary" id="retryBtn">↻ 다시 시작</button></div>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+'use strict';
+/* ================= 유틸 ================= */
+const $ = id => document.getElementById(id);
+const rand = (a,b) => a + Math.random()*(b-a);
+const randi = n => Math.floor(Math.random()*n);
+const pick = arr => arr[randi(arr.length)];
+
+/* ================= 오디오 (효과음) ================= */
+let AC = null;
+function beep(freq, dur){
+  try{
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.type = 'sine'; o.frequency.value = freq;
+    g.gain.setValueAtTime(0.1, AC.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, AC.currentTime + dur);
+    o.connect(g); g.connect(AC.destination);
+    o.start(); o.stop(AC.currentTime + dur);
+  }catch(e){}
+}
+
+/* ================= 상수 ================= */
+const LINE_COLORS = ['#e5484d', '#2f6df6', '#22a06b'];
+const LINE_NAMES  = ['1호선', '2호선', '3호선'];
+const MAX_ST_PER_LINE = 8;   // 한 노선 최대 역 수
+const ST_CAP = 6;            // 역당 대기 승객 상한 (도달 시 게임오버)
+const TRAIN_CAP = 4;         // 열차 정원
+const TRAIN_SPEED = 120;     // px/s
+const DWELL = 0.55;          // 정차 시간(s)
+const BEST_KEY = 'metro-lines-best';
+
+/* ================= 상태 ================= */
+let W = 0, H = 0, DPR = 1;
+let state = 'menu';          // menu | playing | paused | over
+let stations = [], lines = [];
+let nextStId = 1, nextLineId = 1;
+let score = 0, elapsed = 0, best = +(localStorage.getItem(BEST_KEY) || 0);
+let passTimer = 0, stTimer = 0;
+let selectedLineId = null;
+let drag = null;             // {fromId,x,y,hoverId,moved,longFired,timer}
+let toastTimer = null;
+
+const cv = $('cv');
+const ctx = cv.getContext('2d');
+
+function resize(){
+  const r = $('wrap').getBoundingClientRect();
+  DPR = Math.min(2, window.devicePixelRatio || 1);
+  W = Math.max(200, r.width); H = Math.max(200, r.height);
+  cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
+}
+window.addEventListener('resize', resize);
+
+/* ================= 역/노선 관리 ================= */
+const stById = id => stations.find(s => s.id === id);
+const lineById = id => lines.find(l => l.id === id);
+const lineOf = stId => lines.find(l => l.stationIds.includes(stId));
+const selLine = () => lineById(selectedLineId);
+
+function addStation(shape){
+  for(let k = 0; k < 60; k++){
+    const fx = rand(0.12, 0.88), fy = rand(0.16, 0.84);
+    if(stations.every(s => Math.hypot((s.fx-fx)*W, (s.fy-fy)*H) > 130)){
+      stations.push({ id: nextStId++, fx, fy, shape, waiting: [] });
+      return;
+    }
+  }
+  stations.push({ id: nextStId++, fx: rand(0.15,0.85), fy: rand(0.2,0.8), shape, waiting: [] });
+}
+
+function createLine(){
+  if(lines.length >= 3) return null;
+  const used = new Set(lines.map(l => l.ci));
+  let ci = 0; while(used.has(ci)) ci++;
+  const line = { id: nextLineId++, ci, color: LINE_COLORS[ci], name: LINE_NAMES[ci], stationIds: [], trains: [] };
+  lines.push(line);
+  return line;
+}
+
+/* 노선 변경 후 열차 재구성 (역 4개 이상이면 2대 운행) */
+function refreshLine(line){
+  line.trains = [];
+  const n = line.stationIds.length;
+  if(n >= 2){
+    line.trains.push({ line, from: 0, to: 1, t: 0, dwell: 0, riders: [] });
+    if(n >= 4) line.trains.push({ line, from: n-1, to: n-2, t: 0, dwell: 0, riders: [] });
+  }
+}
+
+function appendEnd(line, st, ref){
+  if(!line.stationIds.length){ line.stationIds.push(st.id); return; }
+  const f = stById(line.stationIds[0]), l = stById(line.stationIds[line.stationIds.length-1]);
+  const rf = ref || st;
+  const df = Math.hypot((rf.fx-f.fx)*W, (rf.fy-f.fy)*H);
+  const dl = Math.hypot((rf.fx-l.fx)*W, (rf.fy-l.fy)*H);
+  if(df < dl) line.stationIds.unshift(st.id); else line.stationIds.push(st.id);
+}
+
+/* 드래그로 역 연결 */
+function connect(from, to){
+  let line = lineOf(from.id);
+  if(!line){
+    line = selLine();
+    if(line && line.stationIds.length >= MAX_ST_PER_LINE){ toast('한 노선은 최대 ' + MAX_ST_PER_LINE + '개 역이에요'); return; }
+    if(!line){
+      line = createLine();
+      if(!line){ toast('노선은 최대 3개까지 만들 수 있어요'); return; }
+    }
+    if(!line.stationIds.includes(from.id)) appendEnd(line, from, to);
+  }
+  if(line.stationIds.includes(to.id)){ toast('이미 연결된 역이에요'); return; }
+  if(line.stationIds.length >= MAX_ST_PER_LINE){ toast('한 노선은 최대 ' + MAX_ST_PER_LINE + '개 역이에요'); return; }
+  const idx = line.stationIds.indexOf(from.id);
+  if(idx === 0) line.stationIds.unshift(to.id);
+  else if(idx === line.stationIds.length - 1) line.stationIds.push(to.id);
+  else {
+    const f = stById(line.stationIds[0]), l = stById(line.stationIds[line.stationIds.length-1]);
+    const df = Math.hypot((to.fx-f.fx)*W, (to.fy-f.fy)*H);
+    const dl = Math.hypot((to.fx-l.fx)*W, (to.fy-l.fy)*H);
+    if(df < dl) line.stationIds.unshift(to.id); else line.stationIds.push(to.id);
+  }
+  refreshLine(line);
+  selectedLineId = line.id;
+  renderChips();
+  beep(660, 0.07);
+}
+
+/* 역 길게 누르기: 노선에서 해제 */
+function detachStation(stId){
+  const cand = lines.filter(l => l.stationIds.includes(stId));
+  if(!cand.length){ toast('연결된 노선이 없어요'); return; }
+  const line = cand.find(l => l.id === selectedLineId) || cand[0];
+  line.stationIds = line.stationIds.filter(id => id !== stId);
+  refreshLine(line);
+  renderChips();
+  if(navigator.vibrate) navigator.vibrate(40);
+  toast('🔌 ' + line.name + '에서 역 연결 해제');
+}
+
+/* ================= 승객 스폰 ================= */
+function spawnPassenger(){
+  if(!stations.length) return;
+  const st = pick(stations);
+  const shapes = [...new Set(stations.map(s => s.shape))].filter(sh => sh !== st.shape);
+  if(!shapes.length) return;             // 목적지 모양이 없으면 스폰 불가
+  st.waiting.push({ dest: pick(shapes) });
+  if(st.waiting.length >= ST_CAP) gameOver();
+}
+
+/* ================= 열차 도착: 하차 + 탑승 ================= */
+function arrive(train){
+  const line = train.line;
+  const st = stById(line.stationIds[train.to]);
+  if(!st){ train.dwell = DWELL; return; }
+  // 하차: 목적지 모양 역에 도착한 승객
+  train.riders = train.riders.filter(r => {
+    if(r.dest === st.shape){ score++; beep(880, 0.09); return false; }
+    return true;
+  });
+  // 탑승: 이 노선에 목적지 모양 역이 있는 승객 (선착순, 정원까지)
+  const reachable = new Set(line.stationIds.map(id => stById(id).shape));
+  for(const p of [...st.waiting]){
+    if(train.riders.length >= TRAIN_CAP) break;
+    if(reachable.has(p.dest) && p.dest !== st.shape){
+      train.riders.push(p);
+      st.waiting.splice(st.waiting.indexOf(p), 1);
+    }
+  }
+  train.dwell = DWELL;
+  // 다음 구간 결정 (끝점에서 방향 전환)
+  const n = line.stationIds.length;
+  let dir = train.to > train.from ? 1 : -1;
+  let nt = train.to + dir;
+  if(nt < 0 || nt >= n){ dir *= -1; nt = train.to + dir; }
+  train.from = train.to; train.to = nt; train.t = 0;
+  if(score > best){ best = score; try{ localStorage.setItem(BEST_KEY, best); }catch(e){} }
+  updateHUD();
+}
+
+function updateTrains(dt){
+  for(const line of lines){
+    for(const tr of line.trains){
+      if(tr.dwell > 0){ tr.dwell -= dt; continue; }
+      const a = stById(line.stationIds[tr.from]);
+      const b = stById(line.stationIds[tr.to]);
+      if(!a || !b) continue;
+      const d = Math.hypot((a.fx-b.fx)*W, (a.fy-b.fy)*H) || 1;
+      tr.t += TRAIN_SPEED * dt / d;
+      if(tr.t >= 1){ tr.t = 0; arrive(tr); }
+    }
+  }
+}
+
+/* ================= 게임 흐름 ================= */
+function resetGame(){
+  stations = []; lines = [];
+  nextStId = 1; nextLineId = 1;
+  score = 0; elapsed = 0;
+  passTimer = 2.5; stTimer = 18;
+  selectedLineId = null; drag = null;
+  const shapes = [0, 1, 2];
+  for(let i = 0; i < 3; i++) addStation(shapes[i]);
+  updateHUD(); renderChips();
+}
+
+function startGame(){
+  resetGame();
+  state = 'playing';
+  $('menuOv').classList.add('hidden');
+  $('overOv').classList.add('hidden');
+  $('pauseOv').classList.add('hidden');
+  $('pauseBtn').textContent = '⏸ 일시정지';
+}
+
+function gameOver(){
+  if(state !== 'playing') return;
+  state = 'over';
+  beep(220, 0.4);
+  if(navigator.vibrate) navigator.vibrate(200);
+  if(score > best){ best = score; try{ localStorage.setItem(BEST_KEY, best); }catch(e){} }
+  $('finalScore').textContent = score;
+  $('finalBest').textContent = best;
+  $('finalTime').textContent = fmtTime(elapsed);
+  $('overOv').classList.remove('hidden');
+  updateHUD();
+}
+
+function togglePause(){
+  if(state === 'playing'){
+    state = 'paused';
+    $('pauseOv').classList.remove('hidden');
+    $('pauseBtn').textContent = '▶ 계속하기';
+  }else if(state === 'paused'){
+    state = 'playing';
+    $('pauseOv').classList.add('hidden');
+    $('pauseBtn').textContent = '⏸ 일시정지';
+  }
+}
+
+/* ================= HUD ================= */
+function fmtTime(s){
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return m + ':' + String(ss).padStart(2, '0');
+}
+function updateHUD(){
+  $('score').textContent = score;
+  $('time').textContent = fmtTime(elapsed);
+  $('best').textContent = best;
+}
+function renderChips(){
+  const c = $('chips'); c.innerHTML = '';
+  for(let i = 0; i < 3; i++){
+    const line = lines[i];
+    const d = document.createElement('button');
+    d.className = 'chip' + (line && line.id === selectedLineId ? ' active' : '') + (!line ? ' empty' : '');
+    d.innerHTML = '<span class="dot" style="background:' + (line ? line.color : '#bbb') + '"></span>' + (line ? line.name : (i+1) + '호선');
+    if(line) d.onclick = () => { selectedLineId = line.id; renderChips(); };
+    c.appendChild(d);
+  }
+}
+function toast(msg){
+  const t = $('toast');
+  t.textContent = msg; t.style.opacity = 1;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.opacity = 0; }, 1600);
+}
+
+/* ================= 입력 (마우스 + 터치) ================= */
+function ptrPos(e){
+  const r = cv.getBoundingClientRect();
+  return { x: e.clientX - r.left, y: e.clientY - r.top };
+}
+function stationAt(x, y){
+  let bestS = null, bd = 38;
+  for(const s of stations){
+    const d = Math.hypot(s.fx*W - x, s.fy*H - y);
+    if(d < bd){ bd = d; bestS = s; }
+  }
+  return bestS;
+}
+
+cv.addEventListener('pointerdown', e => {
+  if(state !== 'playing') return;
+  const p = ptrPos(e), s = stationAt(p.x, p.y);
+  if(!s) return;
+  e.preventDefault();
+  try{ cv.setPointerCapture(e.pointerId); }catch(err){}
+  drag = { fromId: s.id, x: p.x, y: p.y, hoverId: s.id, moved: false, longFired: false,
+           timer: setTimeout(() => { if(drag){ drag.longFired = true; detachStation(s.id); drag = null; } }, 550) };
+});
+cv.addEventListener('pointermove', e => {
+  if(!drag || drag.longFired) return;
+  const p = ptrPos(e);
+  if(Math.hypot(p.x - drag.x, p.y - drag.y) > 12) drag.moved = true;
+  drag.x = p.x; drag.y = p.y;
+  const s = stationAt(p.x, p.y);
+  drag.hoverId = s ? s.id : null;
+});
+function endDrag(){
+  if(!drag) return;
+  clearTimeout(drag.timer);
+  const d = drag; drag = null;
+  if(d.longFired) return;
+  const from = stById(d.fromId);
+  const to = d.hoverId != null ? stById(d.hoverId) : null;
+  if(!d.moved){                       // 탭: 해당 역의 노선 선택
+    const l = lineOf(from.id);
+    if(l){ selectedLineId = l.id; renderChips(); }
+    return;
+  }
+  if(from && to && to.id !== from.id) connect(from, to);
+}
+cv.addEventListener('pointerup', endDrag);
+cv.addEventListener('pointercancel', () => { if(drag){ clearTimeout(drag.timer); drag = null; } });
+cv.addEventListener('contextmenu', e => e.preventDefault());
+
+$('delLine').onclick = () => {
+  if(state !== 'playing') return;
+  const l = selLine() || lines[lines.length - 1];
+  if(!l){ toast('삭제할 노선이 없어요'); return; }
+  lines = lines.filter(x => x.id !== l.id);
+  if(selectedLineId === l.id) selectedLineId = lines.length ? lines[lines.length-1].id : null;
+  renderChips();
+  toast('🗑 ' + l.name + ' 삭제됨');
+};
+$('pauseBtn').onclick = togglePause;
+$('restartBtn').onclick = () => { startGame(); };
+$('startBtn').onclick = () => { beep(660, 0.08); startGame(); };
+$('resumeBtn').onclick = togglePause;
+$('pauseRestartBtn').onclick = () => { startGame(); };
+$('retryBtn').onclick = () => { startGame(); };
+
+document.addEventListener('keydown', e => {
+  if(e.code === 'Space'){ e.preventDefault(); togglePause(); }
+  else if(e.key === 'r' || e.key === 'R'){ if(state === 'playing' || state === 'paused' || state === 'over') startGame(); }
+});
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden && state === 'playing') togglePause();
+});
+
+/* ================= 그리기 ================= */
+function drawShape(kind, x, y, r, fill, stroke, lw){
+  ctx.beginPath();
+  if(kind === 0) ctx.arc(x, y, r, 0, 7);
+  else if(kind === 1){ ctx.moveTo(x, y-r); ctx.lineTo(x+r*0.95, y+r*0.75); ctx.lineTo(x-r*0.95, y+r*0.75); ctx.closePath(); }
+  else ctx.rect(x-r*0.9, y-r*0.9, r*1.8, r*1.8);
+  if(fill){ ctx.fillStyle = fill; ctx.fill(); }
+  if(stroke){ ctx.strokeStyle = stroke; ctx.lineWidth = lw || 2; ctx.stroke(); }
+}
+function roundRectPath(x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x+r, y);
+  ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
+  ctx.arcTo(x, y+h, x, y, r);     ctx.arcTo(x, y, x+w, y, r);
+  ctx.closePath();
+}
+function drawStation(s){
+  const x = s.fx*W, y = s.fy*H;
+  if(s.waiting.length >= 5){                       // 임박 경고 펄스
+    const p = 3 + 2*Math.sin(performance.now()/200);
+    ctx.beginPath(); ctx.arc(x, y, 25+p, 0, 7);
+    ctx.strokeStyle = 'rgba(229,72,77,.7)'; ctx.lineWidth = 3; ctx.stroke();
+  }
+  drawShape(s.shape, x, y, 15, '#ffffff', '#2b3340', 3);
+  const n = s.waiting.length;                      // 대기 승객 (작은 모양 아이콘)
+  for(let i = 0; i < n; i++){
+    drawShape(s.waiting[i].dest, x + (i-(n-1)/2)*13, y + 31, 5, '#2b3340');
+  }
+}
+function drawTrain(line, tr){
+  const a = stById(line.stationIds[tr.from]);
+  const b = stById(line.stationIds[tr.to]);
+  if(!a || !b) return;
+  const ax = a.fx*W, ay = a.fy*H, bx = b.fx*W, by = b.fy*H;
+  const x = ax + (bx-ax)*tr.t, y = ay + (by-ay)*tr.t;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(Math.atan2(by-ay, bx-ax));
+  roundRectPath(-14, -8, 28, 16, 6);
+  ctx.fillStyle = '#ffffff'; ctx.fill();
+  ctx.strokeStyle = line.color; ctx.lineWidth = 3; ctx.stroke();
+  ctx.fillStyle = '#2b3340';
+  ctx.font = 'bold 10px sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText(String(tr.riders.length), 0, 1);
+  ctx.restore();
+}
+function draw(){
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  // 배경 도트
+  ctx.fillStyle = '#e8edf4';
+  for(let gx = 24; gx < W; gx += 48)
+    for(let gy = 24; gy < H; gy += 48){
+      ctx.beginPath(); ctx.arc(gx, gy, 1.6, 0, 7); ctx.fill();
+    }
+  // 노선
+  for(const line of lines){
+    if(line.stationIds.length < 2) continue;
+    ctx.beginPath();
+    line.stationIds.forEach((id, i) => {
+      const s = stById(id); if(!s) return;
+      if(i) ctx.lineTo(s.fx*W, s.fy*H); else ctx.moveTo(s.fx*W, s.fy*H);
+    });
+    ctx.strokeStyle = line.color; ctx.lineWidth = 9;
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.85; ctx.stroke(); ctx.globalAlpha = 1;
+  }
+  // 드래그 고스트
+  if(drag && drag.moved){
+    const s = stById(drag.fromId);
+    if(s){
+      const line = lineOf(s.id) || selLine();
+      ctx.setLineDash([8, 8]);
+      ctx.beginPath(); ctx.moveTo(s.fx*W, s.fy*H); ctx.lineTo(drag.x, drag.y);
+      ctx.strokeStyle = line ? line.color : '#888'; ctx.lineWidth = 4; ctx.stroke();
+      ctx.setLineDash([]);
+      if(drag.hoverId && drag.hoverId !== drag.fromId){
+        const h = stById(drag.hoverId);
+        if(h){ ctx.beginPath(); ctx.arc(h.fx*W, h.fy*H, 24, 0, 7); ctx.strokeStyle = '#2b3340'; ctx.lineWidth = 3; ctx.stroke(); }
+      }
+    }
+  }
+  for(const s of stations) drawStation(s);
+  for(const line of lines) for(const tr of line.trains) drawTrain(line, tr);
+}
+
+/* ================= 메인 루프 ================= */
+let last = 0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, (ts - last)/1000 || 0);
+  last = ts;
+  if(state === 'playing'){
+    elapsed += dt;
+    passTimer -= dt;
+    if(passTimer <= 0){                              // 난이도: 스폰 간격 5.5s → 2.2s
+      spawnPassenger();
+      passTimer = Math.max(2.2, 5.5 - elapsed*0.011);
+    }
+    stTimer -= dt;
+    if(stTimer <= 0){
+      if(stations.length < 10) addStation(randi(3));
+      stTimer = 18;
+    }
+    updateTrains(dt);
+    updateHUD();
+  }
+  draw();
+}
+
+/* ================= 초기화 ================= */
+resize();
+resetGame();
+updateHUD();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
