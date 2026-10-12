@@ -1,4 +1,13 @@
-# 🚇 노선 잇기 퍼즐 (Metro Lines)
+# 🚇 메트로 라인 | Metro Lines
+
+> 지하철 노선 잇기 — 승객 배달 퍼즐  
+> Connect subway lines and deliver passengers
+
+[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen?style=flat-square)](https://metasongi.github.io/metro-lines/) ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=flat-square) ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=flat-square)
+
+🌐 **Live:** https://metasongi.github.io/metro-lines/
+
+---
 
 미니 메트로 스타일의 노선 연결 퍼즐 게임입니다. 역을 드래그로 연결해 노선을 만들고,
 열차가 승객을 목적지까지 배달하면 점수를 얻습니다.
@@ -22,3 +31,9 @@
 
 - `index.html` — 단일 파일 게임 (외부 의존성 없음)
 - `.nojekyll` — GitHub Pages 배포용
+
+---
+
+## English Summary
+
+Connect subway lines and deliver passengers.
