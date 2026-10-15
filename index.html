@@ -221,16 +221,22 @@ function connect(from, to){
   beep(660, 0.07);
 }
 
-/* 역 길게 누르기: 노선에서 해제 */
+/* 역 길게 누르기: 노선에서 해제 (역이 0개가 되면 노선 슬롯 반납) */
 function detachStation(stId){
   const cand = lines.filter(l => l.stationIds.includes(stId));
   if(!cand.length){ toast('연결된 노선이 없어요'); return; }
   const line = cand.find(l => l.id === selectedLineId) || cand[0];
   line.stationIds = line.stationIds.filter(id => id !== stId);
   refreshLine(line);
+  if(!line.stationIds.length){
+    lines = lines.filter(l => l.id !== line.id);
+    if(selectedLineId === line.id) selectedLineId = lines.length ? lines[lines.length-1].id : null;
+    toast('🗑 ' + line.name + ' 삭제됨 (남은 역 없음)');
+  }else{
+    toast('🔌 ' + line.name + '에서 역 연결 해제');
+  }
   renderChips();
   if(navigator.vibrate) navigator.vibrate(40);
-  toast('🔌 ' + line.name + '에서 역 연결 해제');
 }
 
 /* ================= 승객 스폰 ================= */
@@ -387,7 +393,10 @@ cv.addEventListener('pointerdown', e => {
 cv.addEventListener('pointermove', e => {
   if(!drag || drag.longFired) return;
   const p = ptrPos(e);
-  if(Math.hypot(p.x - drag.x, p.y - drag.y) > 12) drag.moved = true;
+  if(!drag.moved && Math.hypot(p.x - drag.x, p.y - drag.y) > 12){
+    drag.moved = true;
+    clearTimeout(drag.timer);   // 드래그 시작 → 길게누르기(연결 해제) 타이머 취소
+  }
   drag.x = p.x; drag.y = p.y;
   const s = stationAt(p.x, p.y);
   drag.hoverId = s ? s.id : null;
