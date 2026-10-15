@@ -192,28 +192,24 @@ function appendEnd(line, st, ref){
   if(df < dl) line.stationIds.unshift(st.id); else line.stationIds.push(st.id);
 }
 
-/* 드래그로 역 연결 */
+/* 드래그로 역 연결:
+ * - 선로 위 역 → 빈 역: 노선 연장
+ * - 빈 역 → 선로 위 역: 그 노선에 편입
+ * - 빈 역 → 빈 역: 새 노선 생성 (선택된 다른 노선에 함부로 붙지 않음)
+ */
 function connect(from, to){
-  let line = lineOf(from.id);
+  let line = lineOf(from.id) || lineOf(to.id);
   if(!line){
-    line = selLine();
-    if(line && line.stationIds.length >= MAX_ST_PER_LINE){ toast('한 노선은 최대 ' + MAX_ST_PER_LINE + '개 역이에요'); return; }
-    if(!line){
-      line = createLine();
-      if(!line){ toast('노선은 최대 3개까지 만들 수 있어요'); return; }
-    }
-    if(!line.stationIds.includes(from.id)) appendEnd(line, from, to);
+    line = createLine();
+    if(!line){ toast('노선은 최대 3개까지 만들 수 있어요'); return; }
   }
-  if(line.stationIds.includes(to.id)){ toast('이미 연결된 역이에요'); return; }
-  if(line.stationIds.length >= MAX_ST_PER_LINE){ toast('한 노선은 최대 ' + MAX_ST_PER_LINE + '개 역이에요'); return; }
-  const idx = line.stationIds.indexOf(from.id);
-  if(idx === 0) line.stationIds.unshift(to.id);
-  else if(idx === line.stationIds.length - 1) line.stationIds.push(to.id);
-  else {
-    const f = stById(line.stationIds[0]), l = stById(line.stationIds[line.stationIds.length-1]);
-    const df = Math.hypot((to.fx-f.fx)*W, (to.fy-f.fy)*H);
-    const dl = Math.hypot((to.fx-l.fx)*W, (to.fy-l.fy)*H);
-    if(df < dl) line.stationIds.unshift(to.id); else line.stationIds.push(to.id);
+  if(line.stationIds.includes(from.id) && line.stationIds.includes(to.id)){
+    toast('이미 연결된 역이에요'); return;
+  }
+  for(const st of [from, to]){
+    if(line.stationIds.includes(st.id)) continue;
+    if(line.stationIds.length >= MAX_ST_PER_LINE){ toast('한 노선은 최대 ' + MAX_ST_PER_LINE + '개 역이에요'); break; }
+    appendEnd(line, st);
   }
   refreshLine(line);
   selectedLineId = line.id;
